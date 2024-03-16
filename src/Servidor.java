@@ -4,13 +4,11 @@ import java.nio.file.*;
 import java.util.stream.*;
 
 public class Servidor {
-    //socket de comandos
     private ServerSocket serverSocket;
     private Socket clientSocket;
     private PrintWriter out;
     private BufferedReader in;
     private Path currentDirectory = Paths.get(System.getProperty("user.dir"));
-    //Socket de datos
     private ServerSocket dataServerSocket;
     private Socket dataSocket;
 
@@ -24,8 +22,8 @@ public class Servidor {
     }
 
     public void start() {
+        System.out.println("Servidor iniciado en el puerto " + serverSocket.getLocalPort() + ". Esperando clientes...");
         try {
-            System.out.println("Servidor iniciado en el puerto " + serverSocket.getLocalPort() + ". Esperando clientes...");
             clientSocket = serverSocket.accept();
             System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
             out = new PrintWriter(clientSocket.getOutputStream(), true);
@@ -40,15 +38,14 @@ public class Servidor {
                 processCommand(inputLine);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Error al manejar la conexión del cliente: " + e.getMessage());
         } finally {
             stop();
         }
     }
-
     private void processCommand(String command) {
         String[] parts = command.split(" ", 2);
-        String response;
+        String response = "";
         try {
             switch (parts[0]) {
                 case "list":
@@ -64,12 +61,14 @@ public class Servidor {
                     response = changeDirectory(parts.length > 1 ? parts[1] : "");
                     break;
                 case "put":
-                    acceptFile(parts[1]);
-                    response = "Archivo recibido.";
+                    response = acceptFile(parts.length > 1 ? parts[1] : "");
                     break;
                 case "get":
-                    sendFile(parts[1]);
-                    response = "Archivo enviado.";
+                    if (sendFile(parts[1])) {
+                        response = "Archivo enviado.";
+                    } else {
+                        response = "Error al enviar el archivo.";
+                    }
                     break;
                 default:
                     response = "Comando no reconocido.";
@@ -78,7 +77,7 @@ public class Servidor {
         } catch (Exception e) {
             response = "Error al procesar el comando: " + e.getMessage();
         }
-        out.println(response);
+        out.println(response); // Envía la respuesta final al cliente
     }
 
     private String listDirectory(Path directory) throws IOException {
@@ -133,41 +132,68 @@ public class Servidor {
         }
     }
 
-    private void acceptFile(String fileName) throws IOException {
-        dataSocket = dataServerSocket.accept();
-        InputStream dataIn = dataSocket.getInputStream();
-        Files.copy(dataIn, currentDirectory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
-        dataIn.close();
-        dataSocket.close();
+    private String acceptFile(String fileName) {
+        try {
+            dataSocket = dataServerSocket.accept();
+            InputStream dataIn = new BufferedInputStream(dataSocket.getInputStream());
+            Files.copy(dataIn, currentDirectory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+            dataIn.close();
+            System.out.println("Archivo " + fileName + " recibido.");
+        } catch (IOException e) {
+            System.out.println("Error al recibir el archivo: " + e.getMessage());
+        } finally {
+            try {
+                if (dataSocket != null && !dataSocket.isClosed()) {
+                    dataSocket.close();
+                }
+            } catch (IOException e) {
+                System.out.println("Error al cerrar la conexión de datos: " + e.getMessage());
+            }
+        }
+        return "Archivo recibido.";
     }
 
-    private void sendFile(String fileName) throws IOException {
+    private boolean sendFile(String fileName) {
         Path filePath = currentDirectory.resolve(fileName);
         if (!Files.exists(filePath)) {
             out.println("Archivo no encontrado.");
-            return;
+            return false;
         }
-        dataSocket = dataServerSocket.accept();
-        OutputStream dataOut = dataSocket.getOutputStream();
-        Files.copy(filePath, dataOut);
-        dataOut.close();
-        dataSocket.close();
+        try {
+            dataSocket = dataServerSocket.accept();
+            OutputStream dataOut = new BufferedOutputStream(dataSocket.getOutputStream());
+            Files.copy(filePath, dataOut);
+            dataOut.close();
+            System.out.println("Archivo " + fileName + " enviado.");
+            return true;
+        } catch (IOException e) {
+            System.out.println("Error al enviar el archivo: " + e.getMessage());
+            return false;
+        } finally {
+            try {
+                if (dataSocket != null && !dataSocket.isClosed()) {
+                    dataSocket.close();
+                }
+            } catch (IOException e) {
+                System.out.println("Error al cerrar la conexión de datos: " + e.getMessage());
+            }
+        }
     }
 
     public void stop() {
         try {
             if (in != null) in.close();
             if (out != null) out.close();
-            if (clientSocket != null) clientSocket.close();
-            if (serverSocket != null) serverSocket.close();
+            if (clientSocket != null && !clientSocket.isClosed()) clientSocket.close();
+            if (serverSocket != null && !serverSocket.isClosed()) serverSocket.close();
             System.out.println("Servidor detenido.");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Error al cerrar la conexión del servidor: " + e.getMessage());
         }
     }
 
     public static void main(String[] args) {
-        Servidor server = new Servidor(5555,5556);
+        Servidor server = new Servidor(5555, 5556);
         server.start();
     }
 }
