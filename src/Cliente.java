@@ -47,7 +47,13 @@ public class Cliente {
 
     public void handleCommand(String command) {
         try {
-            if (command.startsWith("put")) {
+            if (command.startsWith("list")) {
+                sendCommand(command);
+                String line;
+                while (!(line = in.readLine()).equals("END-OF-LIST")) {
+                    System.out.println(line);
+                }
+            } else if (command.startsWith("put")) {
                 String[] parts = command.split(" ", 2);
                 if (parts.length > 1) {
                     sendCommand(command);
@@ -57,6 +63,7 @@ public class Cliente {
                         sendData(file);
                         System.out.println("Archivo enviado al servidor.");
                     } else {
+                        dataSocket.close();
                         System.out.println("Archivo no encontrado.");
                     }
                     dataSocket.close();
@@ -72,7 +79,7 @@ public class Cliente {
                 }
             } else {
                 sendCommand(command);
-                System.out.println("Respuesta del servidor: " + in.readLine());
+                System.out.println(in.readLine());
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -101,7 +108,7 @@ public class Cliente {
                 client.handleCommand(userInput);
             }
             client.sendCommand("quit");
-            System.out.println("Respuesta del servidor: " + client.in.readLine()); // Asegurarse de leer la respuesta final de "quit"
+            //System.out.println("Respuesta del servidor: " + client.in.readLine());
         } catch (IOException e) {
             e.printStackTrace();
         } finally {

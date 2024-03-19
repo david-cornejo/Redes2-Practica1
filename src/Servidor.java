@@ -61,14 +61,10 @@ public class Servidor {
                     response = changeDirectory(parts.length > 1 ? parts[1] : "");
                     break;
                 case "put":
-                    response = acceptFile(parts.length > 1 ? parts[1] : "");
+                    acceptFile(parts.length > 1 ? parts[1] : "");
                     break;
                 case "get":
-                    if (sendFile(parts[1])) {
-                        response = "Archivo enviado.";
-                    } else {
-                        response = "Error al enviar el archivo.";
-                    }
+                    sendFile(parts.length > 1 ? parts[1] : "");
                     break;
                 default:
                     response = "Comando no reconocido.";
@@ -81,11 +77,13 @@ public class Servidor {
     }
 
     private String listDirectory(Path directory) throws IOException {
+        StringBuilder response = new StringBuilder();
         try (Stream<Path> paths = Files.list(directory)) {
-            String fileList = paths.map(path -> path.getFileName().toString())
-                    .collect(Collectors.joining("\n"));
-            return fileList.isEmpty() ? "El directorio está vacío" : fileList;
+            paths.map(path -> path.getFileName().toString())
+                    .forEach(filename -> response.append(filename).append("\n"));
         }
+        response.append("END-OF-LIST");
+        return response.toString();
     }
 
     private String createDirectory(String dirName) {
@@ -132,7 +130,7 @@ public class Servidor {
         }
     }
 
-    private String acceptFile(String fileName) {
+    private void acceptFile(String fileName) {
         try {
             dataSocket = dataServerSocket.accept();
             InputStream dataIn = new BufferedInputStream(dataSocket.getInputStream());
@@ -150,14 +148,13 @@ public class Servidor {
                 System.out.println("Error al cerrar la conexión de datos: " + e.getMessage());
             }
         }
-        return "Archivo recibido.";
     }
 
-    private boolean sendFile(String fileName) {
+    private void sendFile(String fileName) {
         Path filePath = currentDirectory.resolve(fileName);
         if (!Files.exists(filePath)) {
             out.println("Archivo no encontrado.");
-            return false;
+            return;
         }
         try {
             dataSocket = dataServerSocket.accept();
@@ -165,10 +162,8 @@ public class Servidor {
             Files.copy(filePath, dataOut);
             dataOut.close();
             System.out.println("Archivo " + fileName + " enviado.");
-            return true;
         } catch (IOException e) {
             System.out.println("Error al enviar el archivo: " + e.getMessage());
-            return false;
         } finally {
             try {
                 if (dataSocket != null && !dataSocket.isClosed()) {
